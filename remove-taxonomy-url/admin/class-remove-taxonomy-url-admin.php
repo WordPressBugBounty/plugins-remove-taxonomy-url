@@ -1,5 +1,4 @@
 <?php
-
 /**
  * The admin-specific functionality of the plugin.
  *
@@ -73,62 +72,8 @@ class Remove_Taxonomy_Url_Admin {
 		/**
 		 * The class responsible for defining all actions that occur in the admin area.
 		 */
-		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'admin/partials/remove-taxonomy-url-settings.php';
-
+		require_once plugin_dir_path( __DIR__ ) . 'admin/partials/remove-taxonomy-url-settings.php';
 	}
-
-	public function remove_tax_slugs( $query_vars ) {
-
-		// Add the slugs of those taxonomies which you want to remove from url.
-		$options   = get_option( 'rtu_basics' );
-		$tax_slugs = $options['rtu_post_types'];
-
-		if ( isset( $query_vars['attachment'] ) ? $query_vars['attachment'] : null ) :
-			$include_children = true;
-			$name             = $query_vars['attachment'];
-		else :
-			if ( isset( $query_vars['name'] ) ? $query_vars['name'] : null ) {
-				$include_children = false;
-				$name             = $query_vars['name'];
-			}
-		endif;
-		if ( isset( $name ) ) :
-			foreach ( $tax_slugs as $slug ) {
-				$term = get_term_by( 'slug', $name, $slug );
-				if ( $term && ! is_wp_error( $term ) ) :
-					if ( $include_children ) {
-						unset( $query_vars['attachment'] );
-						$parent = $term->parent;
-						while ( $parent ) {
-							$parent_term = get_term( $parent, $slug );
-							$name        = $parent_term->slug . '/' . $name;
-							$parent      = $parent_term->parent;
-						}
-					} else {
-						unset( $query_vars['name'] );
-					}
-					$query_vars[ $slug ] = $name;
-				endif;
-			}
-		endif;
-
-		return $query_vars;
-	}
-
-	public function build_tax_slugs( $url, $term, $taxonomy ) {
-
-		// Add the slugs of those taxonomies which you want to remove from url.
-		$options        = get_option( 'rtu_basics' );
-		$taxonomy_slugs = $options['rtu_post_types'];
-		foreach ( $taxonomy_slugs as $taxonomy_slug ) {
-			if ( stripos( $url, $taxonomy_slug ) === true || $taxonomy == $taxonomy_slug ) {
-				$url = str_replace( '/' . $taxonomy_slug, '', $url );
-			}
-		}
-
-		return $url;
-	}
-
 
 	/**
 	 * Register the stylesheets for the admin area.
@@ -150,31 +95,40 @@ class Remove_Taxonomy_Url_Admin {
 		 */
 
 		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/remove-taxonomy-url-admin.css', array(), $this->version, 'all' );
-
 	}
 
 	/**
 	 * Register the JavaScript for the admin area.
 	 *
 	 * @since    1.0.0
+	 *
+	 * @param string $hook_suffix Current admin screen's hook suffix (provided by admin_enqueue_scripts).
 	 */
-	public function enqueue_scripts() {
-
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Remove_Taxonomy_Url_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Remove_Taxonomy_Url_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
+	public function enqueue_scripts( $hook_suffix = '' ) {
 
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/remove-taxonomy-url-admin.js', array( 'jquery' ), $this->version, false );
 
+		if ( 'settings_page_rtu_settings_page' !== $hook_suffix ) {
+			return;
+		}
+
+		wp_enqueue_script(
+			'rtu-health-check',
+			plugin_dir_url( __FILE__ ) . 'js/rtu-health-check.js',
+			array(),
+			$this->version,
+			true
+		);
+		wp_localize_script(
+			'rtu-health-check',
+			'rtuHealthCheckL10n',
+			array(
+				'taxonomy'      => __( 'Taxonomy', 'remove-taxonomy-url' ),
+				'termSlug'      => __( 'Term slug', 'remove-taxonomy-url' ),
+				'conflictsWith' => __( 'Conflicts with', 'remove-taxonomy-url' ),
+				'noConflicts'   => __( 'No collisions found.', 'remove-taxonomy-url' ),
+				'failed'        => __( 'Audit failed.', 'remove-taxonomy-url' ),
+			)
+		);
 	}
-
 }
-
