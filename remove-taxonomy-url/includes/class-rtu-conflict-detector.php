@@ -126,15 +126,18 @@ class RTU_Conflict_Detector {
 
 	/**
 	 * Surface a warning notice on settings save if collisions are present.
+	 * Also surfaces an info notice when hierarchy is toggled on for the first time.
 	 * Filter callback for pre_update_option_rtu_basics. Never blocks the save.
 	 *
 	 * @param mixed $new_value Incoming option value.
-	 * @param mixed $old_value Previously stored value (unused).
+	 * @param mixed $old_value Previously stored value.
 	 * @return mixed Unmodified $new_value.
 	 */
 	public function warn_on_save( $new_value, $old_value ) {
-		unset( $old_value );
-		if ( ! RTU_Options::is_feature_enabled( 'rtu_enable_collision' ) ) {
+		$collision_enabled = ( is_array( $new_value ) && array_key_exists( 'rtu_enable_collision', $new_value ) )
+			? ( 'on' === $new_value['rtu_enable_collision'] )
+			: true;
+		if ( ! $collision_enabled ) {
 			return $new_value;
 		}
 		$taxonomies = ( is_array( $new_value ) && isset( $new_value['rtu_post_types'] ) )
@@ -153,6 +156,23 @@ class RTU_Conflict_Detector {
 				'warning'
 			);
 		}
+
+		$was_on = ( is_array( $old_value ) && isset( $old_value['rtu_enable_hierarchy'] ) && 'on' === $old_value['rtu_enable_hierarchy'] );
+		$now_on = ( is_array( $new_value ) && isset( $new_value['rtu_enable_hierarchy'] ) && 'on' === $new_value['rtu_enable_hierarchy'] );
+		if ( ! $was_on && $now_on ) {
+			$child_count = RTU_Options::count_child_terms();
+			add_settings_error(
+				'rtu_basics',
+				'rtu_hierarchy_enabled',
+				sprintf(
+					/* translators: %d: number of child terms affected */
+					esc_html__( 'Hierarchical term URLs enabled. %d child-term URL(s) will change to /parent/child/; existing flat URLs will 301-redirect to them.', 'remove-taxonomy-url' ),
+					(int) $child_count
+				),
+				'info'
+			);
+		}
+
 		return $new_value;
 	}
 
@@ -167,6 +187,25 @@ class RTU_Conflict_Detector {
 			wp_send_json_error( array( 'message' => 'forbidden' ), 403 );
 		}
 		$collisions = $this->find_collisions( RTU_Options::get_active_taxonomies() );
-		wp_send_json_success( array( 'collisions' => $collisions ) );
+		wp_send_json_success(
+			array(
+				'collisions' => $collisions,
+				'hierarchy'  => $this->hierarchy_status(),
+			)
+		);
+	}
+
+	/**
+	 * Current hierarchy status for the Health Check display.
+	 *
+	 * @return array array( 'enabled' => bool, 'child_terms' => int, 'child_url_shape' => string )
+	 */
+	public function hierarchy_status() {
+		$enabled = RTU_Options::is_feature_enabled( 'rtu_enable_hierarchy' );
+		return array(
+			'enabled'         => (bool) $enabled,
+			'child_terms'     => RTU_Options::count_child_terms(),
+			'child_url_shape' => $enabled ? 'nested' : 'flat',
+		);
 	}
 }

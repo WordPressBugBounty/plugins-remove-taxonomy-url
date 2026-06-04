@@ -13,7 +13,7 @@
  * Plugin Name:       Remove Taxonomy URL
  * Plugin URI:        https://wordpress.org/plugins/remove-taxonomy-url/
  * Description:       Strip custom taxonomy slugs from URLs. Optional 301 redirects, hierarchical term URLs, pagination support, and slug-collision detection.
- * Version:           3.0.1
+ * Version:           3.1.0
  * Requires at least: 5.0
  * Requires PHP:      7.4
  * Author:            Sungraiz Faryad
@@ -34,7 +34,7 @@ if ( ! defined( 'WPINC' ) ) {
  * Start at version 1.0.0 and use SemVer - https://semver.org
  * Rename this for your plugin and update it as you release new versions.
  */
-define( 'REMOVE_TAXONOMY_URL_VERSION', '3.0.1' );
+define( 'REMOVE_TAXONOMY_URL_VERSION', '3.1.0' );
 
 /**
  * The code that runs during plugin activation.
@@ -96,4 +96,27 @@ add_action(
 		}
 	},
 	5
+);
+
+// After an in-place plugin update (no activation hook fires), arm a one-time rewrite
+// flush so the hierarchy rules regenerate with the new code on the next admin_init.
+add_action(
+	'upgrader_process_complete',
+	static function ( $upgrader, $hook_extra ) {
+		unset( $upgrader );
+		if ( ! is_array( $hook_extra ) ) {
+			return;
+		}
+		$action = isset( $hook_extra['action'] ) ? $hook_extra['action'] : '';
+		$type   = isset( $hook_extra['type'] ) ? $hook_extra['type'] : '';
+		if ( 'update' !== $action || 'plugin' !== $type ) {
+			return;
+		}
+		$plugins = isset( $hook_extra['plugins'] ) ? (array) $hook_extra['plugins'] : array();
+		if ( in_array( plugin_basename( __FILE__ ), $plugins, true ) ) {
+			set_transient( 'rtu_needs_flush', 1, HOUR_IN_SECONDS );
+		}
+	},
+	10,
+	2
 );
